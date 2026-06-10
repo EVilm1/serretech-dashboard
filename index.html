@@ -839,6 +839,57 @@
   </main>
 
   <!-- ======================================================
+       DEBUG LOG PANEL
+  ====================================================== -->
+  <div style="padding:0 16px 0; max-width:820px; margin:0 auto;">
+    <details id="debugPanel" style="margin-bottom:20px;">
+      <summary style="cursor:pointer; font-size:11px; font-weight:700; letter-spacing:1.5px;
+                      text-transform:uppercase; color:rgba(255,255,255,.4); padding:10px 0;
+                      list-style:none; display:flex; align-items:center; gap:8px;">
+        <span>🔌</span>
+        <span>Logs de connexion</span>
+        <span id="logBadge" style="margin-left:auto; background:rgba(248,113,113,.2);
+              color:#f87171; border:1px solid rgba(248,113,113,.3); border-radius:10px;
+              padding:2px 8px; font-size:10px; display:none;">Erreur</span>
+      </summary>
+      <div id="logBox" style="
+        background: rgba(0,0,0,.4);
+        border: 1px solid rgba(255,255,255,.08);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-family: 'SF Mono', 'Fira Code', monospace;
+        font-size: 11px;
+        line-height: 1.8;
+        max-height: 220px;
+        overflow-y: auto;
+        color: rgba(255,255,255,.55);
+      ">En attente…</div>
+      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button onclick="tryAltUrl('/mqtt')" style="font-size:11px; padding:6px 12px;
+          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+          border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
+          Essayer <code>:9001/mqtt</code>
+        </button>
+        <button onclick="tryAltUrl('/ws')" style="font-size:11px; padding:6px 12px;
+          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+          border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
+          Essayer <code>:9001/ws</code>
+        </button>
+        <button onclick="tryAltUrl('', 8083)" style="font-size:11px; padding:6px 12px;
+          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+          border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
+          Essayer <code>:8083</code>
+        </button>
+        <button onclick="tryAltUrl('', 8080)" style="font-size:11px; padding:6px 12px;
+          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
+          border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
+          Essayer <code>:8080</code>
+        </button>
+      </div>
+    </details>
+  </div>
+
+  <!-- ======================================================
        FOOTER
   ====================================================== -->
   <footer class="footer">
@@ -977,6 +1028,45 @@
   }
 
   /* ================================================================
+     DEBUG LOG
+  ================================================================ */
+  const LOG_COLORS = { info:'rgba(255,255,255,.5)', ok:'#4ade80', warn:'#fbbf24', err:'#f87171' };
+
+  function log(msg, level = 'info') {
+    const box = document.getElementById('logBox');
+    if (!box) return;
+    const badge = document.getElementById('logBadge');
+    const time  = new Date().toLocaleTimeString('fr-FR');
+    const icons = { info:'·', ok:'✓', warn:'⚠', err:'✕' };
+    const line  = document.createElement('div');
+    line.style.color = LOG_COLORS[level];
+    line.textContent = `[${time}] ${icons[level]} ${msg}`;
+    if (box.textContent === 'En attente…') box.textContent = '';
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
+    console.log(`[MQTT ${level}]`, msg);
+    // Show error badge
+    if (level === 'err' || level === 'warn') {
+      if (badge) { badge.style.display = 'block'; }
+      document.getElementById('debugPanel').open = true;
+    }
+  }
+
+  function tryAltUrl(path, port) {
+    try {
+      const url    = new URL(settings.broker);
+      if (port) url.port = port;
+      url.pathname = path || '/';
+      const newUrl = url.toString().replace(/\/$/, '') + (path || '');
+      log(`Test URL alternative : ${newUrl}`, 'warn');
+      localStorage.setItem('st_broker', newUrl);
+      settings = loadSettings();
+      updateFooterBroker();
+      connect();
+    } catch(e) { log('URL invalide : ' + e.message, 'err'); }
+  }
+
+  /* ================================================================
      SENSOR DISPLAY
   ================================================================ */
   // Extract numeric value from a string like "23.5°C", "1200 ppm", "65%"
@@ -1066,37 +1156,44 @@
 
     setStatus('connecting', 'Connexion…');
     updateFooterBroker();
+    log(`Tentative de connexion → ${settings.broker}`, 'info');
+    log(`Client ID : ${settings.clientId}`, 'info');
 
     try {
       client = mqtt.connect(settings.broker, {
         clientId:        settings.clientId,
         clean:           true,
         connectTimeout:  10000,
-        reconnectPeriod: 6000,
+        reconnectPeriod: 0,       // on gère manuellement pour mieux logguer
+        keepalive:       30,
       });
     } catch (e) {
       setStatus('disconnected', 'Erreur URL');
+      log('URL invalide : ' + e.message, 'err');
       toast('URL broker invalide', 'error');
       return;
     }
 
-    client.on('connect', () => {
+    client.on('connect', (connack) => {
       setStatus('connected', 'Connecté');
+      log('Connecté ! (returnCode=' + connack.returnCode + ')', 'ok');
       toast('✓ Connecté au broker MQTT');
 
-      // Subscribe to all sensor topics (wildcard)
-      client.subscribe(DASHBOARD_ROOT + '#', err => {
-        if (err) toast('Erreur souscription capteurs', 'error');
+      const topicCapteurs   = DASHBOARD_ROOT + '#';
+      const topicActionneurs = PROJECT_ROOT + settings.group + '/actionneurs/#';
+
+      client.subscribe(topicCapteurs, err => {
+        if (err) { log('Erreur subscribe capteurs : ' + err.message, 'err'); return; }
+        log('Abonné → ' + topicCapteurs, 'ok');
       });
 
-      // Subscribe to actuator feedback (if Arduino echoes state)
-      client.subscribe(PROJECT_ROOT + settings.group + '/actionneurs/#');
+      client.subscribe(topicActionneurs, err => {
+        if (!err) log('Abonné → ' + topicActionneurs, 'ok');
+      });
     });
 
     client.on('message', (topic, message) => {
       const payload = message.toString().trim();
-
-      // Update timestamp
       const now = new Date();
       document.getElementById('updateBar').textContent =
         '🕐 Dernière mise à jour : ' + now.toLocaleTimeString('fr-FR');
@@ -1105,7 +1202,12 @@
       if (topic.startsWith(DASHBOARD_ROOT)) {
         const suffix  = decodeURIComponent(topic.slice(DASHBOARD_ROOT.length));
         const mapping = TOPIC_MAP[suffix];
-        if (mapping) renderSensor(mapping.id, payload);
+        if (mapping) {
+          log(`📥 ${suffix} = ${payload}`, 'ok');
+          renderSensor(mapping.id, payload);
+        } else {
+          log(`Topic inconnu : ${suffix}`, 'warn');
+        }
       }
 
       // Actuator feedback
@@ -1115,9 +1217,29 @@
       }
     });
 
-    client.on('error',     (e) => { console.error('MQTT:', e); setStatus('disconnected', 'Erreur'); });
-    client.on('offline',   ()  => setStatus('disconnected', 'Hors ligne'));
-    client.on('reconnect', ()  => setStatus('connecting',   'Reconnexion…'));
+    client.on('error', (e) => {
+      setStatus('disconnected', 'Erreur');
+      log('Erreur : ' + (e.message || e), 'err');
+    });
+
+    client.on('close', () => {
+      setStatus('disconnected', 'Fermé');
+      log('Connexion fermée (WebSocket close). Vérifiez le port/chemin du broker.', 'err');
+    });
+
+    client.on('offline', () => {
+      setStatus('disconnected', 'Hors ligne');
+      log('Client hors ligne', 'warn');
+    });
+
+    client.on('reconnect', () => {
+      setStatus('connecting', 'Reconnexion…');
+      log('Tentative de reconnexion…', 'warn');
+    });
+
+    client.on('disconnect', (packet) => {
+      log('Déconnecté par le broker (code=' + (packet && packet.reasonCode) + ')', 'warn');
+    });
   }
 
   /* ================================================================
