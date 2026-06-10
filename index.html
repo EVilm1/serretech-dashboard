@@ -9,7 +9,9 @@
   <meta name="theme-color" content="#060f06">
   <title>🌿 Serre'Tech</title>
 
-  <!-- MQTT.js via CDN -->
+  <!-- Socket.IO — même version que le serveur du prof -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+  <!-- MQTT.js — pour l'envoi des commandes uniquement -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
   <style>
@@ -972,15 +974,19 @@
   };
 
   /* ================================================================
-     SETTINGS (localStorage persistence)
+     CONSTANTS
+  ================================================================ */
+  // Serveur du prof — source de vérité pour les données capteurs
+  const SCHOOL_SERVER = 'https://ferme.bzh.dev.icam.school';
+
+  /* ================================================================
+     SETTINGS (pour les commandes MQTT uniquement)
   ================================================================ */
   function genClientId() {
-    // Doit être différent du client Arduino (SerreTechClientR4)
     return 'SerreTech-Web-' + Math.random().toString(16).slice(2, 6).toUpperCase();
   }
 
   function loadSettings() {
-    // Auto-detect ws vs wss based on page protocol
     const defaultProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
     const defaultPort  = window.location.protocol === 'https:' ? 8884  : 9001;
     return {
@@ -993,9 +999,10 @@
   let settings = loadSettings();
 
   /* ================================================================
-     MQTT STATE
+     STATE
   ================================================================ */
-  let client = null;
+  let mqttClient  = null;   // pour publier les commandes
+  let ioSocket    = null;   // pour recevoir les données
 
   /* ================================================================
      UI HELPERS
@@ -1019,12 +1026,18 @@
     const el = document.getElementById('card-' + cardId);
     if (!el) return;
     el.classList.remove('updated');
-    void el.offsetWidth; // force reflow
+    void el.offsetWidth;
     el.classList.add('updated');
   }
 
+  function updateTimestamp() {
+    document.getElementById('updateBar').textContent =
+      '🕐 Dernière mise à jour : ' + new Date().toLocaleTimeString('fr-FR');
+  }
+
   function updateFooterBroker() {
-    document.getElementById('footerBroker').textContent = '📡 ' + settings.broker;
+    document.getElementById('footerBroker').textContent =
+      '📡 Données : ' + SCHOOL_SERVER + '  |  Commandes : ' + settings.broker;
   }
 
   /* ================================================================
@@ -1033,37 +1046,128 @@
   const LOG_COLORS = { info:'rgba(255,255,255,.5)', ok:'#4ade80', warn:'#fbbf24', err:'#f87171' };
 
   function log(msg, level = 'info') {
-    const box = document.getElementById('logBox');
-    if (!box) return;
+    const box   = document.getElementById('logBox');
     const badge = document.getElementById('logBadge');
-    const time  = new Date().toLocaleTimeString('fr-FR');
+    if (!box) return;
     const icons = { info:'·', ok:'✓', warn:'⚠', err:'✕' };
     const line  = document.createElement('div');
     line.style.color = LOG_COLORS[level];
-    line.textContent = `[${time}] ${icons[level]} ${msg}`;
+    line.textContent = `[${new Date().toLocaleTimeString('fr-FR')}] ${icons[level]} ${msg}`;
     if (box.textContent === 'En attente…') box.textContent = '';
     box.appendChild(line);
     box.scrollTop = box.scrollHeight;
-    console.log(`[MQTT ${level}]`, msg);
-    // Show error badge
-    if (level === 'err' || level === 'warn') {
-      if (badge) { badge.style.display = 'block'; }
+    console.log(`[${level.toUpperCase()}]`, msg);
+    if (level === 'err') {
+      if (badge) badge.style.display = 'block';
       document.getElementById('debugPanel').open = true;
     }
   }
 
   function tryAltUrl(path, port) {
     try {
-      const url    = new URL(settings.broker);
+      const url = new URL(settings.broker);
       if (port) url.port = port;
       url.pathname = path || '/';
       const newUrl = url.toString().replace(/\/$/, '') + (path || '');
-      log(`Test URL alternative : ${newUrl}`, 'warn');
+      log(`Test commandes URL : ${newUrl}`, 'warn');
       localStorage.setItem('st_broker', newUrl);
       settings = loadSettings();
       updateFooterBroker();
-      connect();
+      connectMQTT();
     } catch(e) { log('URL invalide : ' + e.message, 'err'); }
+  }
+
+  /* ================================================================
+     SOCKET.IO — LECTURE DES CAPTEURS (serveur du prof)
+     Architecture : Arduino → MQTT TCP 1883 → Node.js → Socket.IO → navigateur
+  ================================================================ */
+  function connectSocketIO() {
+    if (ioSocket) { ioSocket.disconnect(); ioSocket = null; }
+
+    setStatus('connecting', 'Connexion…');
+    log('Socket.IO → ' + SCHOOL_SERVER, 'info');
+
+    ioSocket = io(SCHOOL_SERVER, {
+      transports: ['websocket', 'polling'],
+    });
+
+    ioSocket.on('connect', () => {
+      setStatus('connected', 'Live ✓');
+      log('Socket.IO connecté (ID: ' + ioSocket.id + ')', 'ok');
+      toast('✓ Données en direct connectées');
+      fetchInitialState();
+    });
+
+    // Nouveau message MQTT reçu en temps réel
+    ioSocket.on('new_message', (msg) => {
+      if (!msg || !msg.topic) return;
+      if (msg.topic.startsWith(DASHBOARD_ROOT)) {
+        const suffix  = msg.topic.slice(DASHBOARD_ROOT.length);
+        const mapping = TOPIC_MAP[suffix];
+        if (mapping) {
+          renderSensor(mapping.id, msg.payload);
+          updateTimestamp();
+          log('📥 ' + suffix + ' = ' + msg.payload, 'ok');
+        }
+      }
+    });
+
+    // Mise à jour groupée (rechargement de page, etc.)
+    ioSocket.on('update_data', (data) => {
+      if (!Array.isArray(data)) return;
+      data.forEach(msg => {
+        if (msg.topic && msg.topic.startsWith(DASHBOARD_ROOT)) {
+          const suffix  = msg.topic.slice(DASHBOARD_ROOT.length);
+          const mapping = TOPIC_MAP[suffix];
+          if (mapping) renderSensor(mapping.id, msg.payload);
+        }
+      });
+      updateTimestamp();
+    });
+
+    ioSocket.on('disconnect', (reason) => {
+      setStatus('disconnected', 'Déconnecté');
+      log('Socket.IO déconnecté : ' + reason, 'warn');
+    });
+
+    ioSocket.on('connect_error', (e) => {
+      setStatus('disconnected', 'Erreur');
+      log('Erreur Socket.IO : ' + e.message, 'err');
+    });
+  }
+
+  /* ================================================================
+     REST API — ÉTAT INITIAL DES CAPTEURS
+  ================================================================ */
+  async function fetchInitialState() {
+    try {
+      log('Chargement état initial…', 'info');
+      const data = await fetch(SCHOOL_SERVER + '/api/mqtt/project/SerreTech')
+        .then(r => r.json());
+
+      // Reconstruit le dernier état connu de chaque capteur
+      const latest = {};
+      if (data.recent_messages) {
+        // Parcours du plus ancien au plus récent → le dernier gagne
+        [...data.recent_messages].reverse().forEach(msg => {
+          if (msg.topic && msg.topic.startsWith(DASHBOARD_ROOT)) {
+            const suffix = msg.topic.slice(DASHBOARD_ROOT.length);
+            latest[suffix] = msg.payload;
+          }
+        });
+      }
+
+      let count = 0;
+      Object.entries(latest).forEach(([suffix, payload]) => {
+        const mapping = TOPIC_MAP[suffix];
+        if (mapping) { renderSensor(mapping.id, payload); count++; }
+      });
+
+      log(`État initial : ${count} capteur(s) chargé(s)`, count > 0 ? 'ok' : 'warn');
+      if (count > 0) updateTimestamp();
+    } catch(e) {
+      log('Erreur état initial : ' + e.message, 'err');
+    }
   }
 
   /* ================================================================
@@ -1149,97 +1253,42 @@
   }
 
   /* ================================================================
-     MQTT CONNECTION
+     MQTT — ENVOI DES COMMANDES UNIQUEMENT (WebSocket vers broker)
+     Fonctionne si le broker expose un port WebSocket (à demander au prof)
   ================================================================ */
-  function connect() {
-    if (client) { client.end(true); client = null; }
+  function connectMQTT() {
+    if (mqttClient) { mqttClient.end(true); mqttClient = null; }
 
-    setStatus('connecting', 'Connexion…');
-    updateFooterBroker();
-    log(`Tentative de connexion → ${settings.broker}`, 'info');
-    log(`Client ID : ${settings.clientId}`, 'info');
+    log(`MQTT commandes → ${settings.broker} (clientId: ${settings.clientId})`, 'info');
 
     try {
-      client = mqtt.connect(settings.broker, {
+      mqttClient = mqtt.connect(settings.broker, {
         clientId:        settings.clientId,
         clean:           true,
-        connectTimeout:  10000,
-        reconnectPeriod: 0,       // on gère manuellement pour mieux logguer
-        keepalive:       30,
+        connectTimeout:  8000,
+        reconnectPeriod: 0,
       });
-    } catch (e) {
-      setStatus('disconnected', 'Erreur URL');
-      log('URL invalide : ' + e.message, 'err');
-      toast('URL broker invalide', 'error');
+    } catch(e) {
+      log('MQTT commandes — URL invalide : ' + e.message, 'err');
       return;
     }
 
-    client.on('connect', (connack) => {
-      setStatus('connected', 'Connecté');
-      log('Connecté ! (returnCode=' + connack.returnCode + ')', 'ok');
-      toast('✓ Connecté au broker MQTT');
-
-      const topicCapteurs   = DASHBOARD_ROOT + '#';
-      const topicActionneurs = PROJECT_ROOT + settings.group + '/actionneurs/#';
-
-      client.subscribe(topicCapteurs, err => {
-        if (err) { log('Erreur subscribe capteurs : ' + err.message, 'err'); return; }
-        log('Abonné → ' + topicCapteurs, 'ok');
-      });
-
-      client.subscribe(topicActionneurs, err => {
-        if (!err) log('Abonné → ' + topicActionneurs, 'ok');
-      });
+    mqttClient.on('connect', () => {
+      log('MQTT commandes connecté ✓ (commandes actives)', 'ok');
+      toast('🎛️ Commandes MQTT actives', 'info');
+      // Abonnement retour actionneurs
+      mqttClient.subscribe(PROJECT_ROOT + settings.group + '/actionneurs/#');
     });
 
-    client.on('message', (topic, message) => {
-      const payload = message.toString().trim();
-      const now = new Date();
-      document.getElementById('updateBar').textContent =
-        '🕐 Dernière mise à jour : ' + now.toLocaleTimeString('fr-FR');
-
-      // Sensor data from dashboard topics
-      if (topic.startsWith(DASHBOARD_ROOT)) {
-        const suffix  = decodeURIComponent(topic.slice(DASHBOARD_ROOT.length));
-        const mapping = TOPIC_MAP[suffix];
-        if (mapping) {
-          log(`📥 ${suffix} = ${payload}`, 'ok');
-          renderSensor(mapping.id, payload);
-        } else {
-          log(`Topic inconnu : ${suffix}`, 'warn');
-        }
-      }
-
-      // Actuator feedback
+    mqttClient.on('message', (topic, message) => {
       if (topic.startsWith(PROJECT_ROOT + settings.group + '/actionneurs/')) {
-        const actuator = topic.split('/').pop();
-        setActuatorStatus(actuator, payload);
+        setActuatorStatus(topic.split('/').pop(), message.toString().trim());
       }
     });
 
-    client.on('error', (e) => {
-      setStatus('disconnected', 'Erreur');
-      log('Erreur : ' + (e.message || e), 'err');
-    });
-
-    client.on('close', () => {
-      setStatus('disconnected', 'Fermé');
-      log('Connexion fermée (WebSocket close). Vérifiez le port/chemin du broker.', 'err');
-    });
-
-    client.on('offline', () => {
-      setStatus('disconnected', 'Hors ligne');
-      log('Client hors ligne', 'warn');
-    });
-
-    client.on('reconnect', () => {
-      setStatus('connecting', 'Reconnexion…');
-      log('Tentative de reconnexion…', 'warn');
-    });
-
-    client.on('disconnect', (packet) => {
-      log('Déconnecté par le broker (code=' + (packet && packet.reasonCode) + ')', 'warn');
-    });
+    mqttClient.on('error',  (e) => log('MQTT commandes erreur : ' + (e.message || e), 'err'));
+    mqttClient.on('close',  ()  => log('MQTT commandes : connexion fermée (port WebSocket non disponible ?)', 'warn'));
+    mqttClient.on('offline',()  => log('MQTT commandes : hors ligne', 'warn'));
   }
 
   /* ================================================================
@@ -1276,13 +1325,17 @@
   /* ================================================================
      SEND COMMANDS
   ================================================================ */
-  function isConnected() { return client && client.connected; }
+  function isConnected() { return mqttClient && mqttClient.connected; }
 
   function sendCmd(actuator, value) {
-    if (!isConnected()) { toast('⚠️ Non connecté', 'error'); return; }
+    if (!isConnected()) {
+      toast('⚠️ Commandes non disponibles — port WebSocket broker requis', 'error');
+      log('Commande ignorée : MQTT commandes non connecté', 'warn');
+      return;
+    }
 
     const topic = PROJECT_ROOT + settings.group + '/actionneurs/' + actuator;
-    client.publish(topic, value, { qos: 1 }, err => {
+    mqttClient.publish(topic, value, { qos: 1 }, err => {
       if (err) { toast('Erreur envoi', 'error'); return; }
       setActuatorStatus(actuator, value);
       const label = { OPEN:'Ouverture demandée 🔓', CLOSE:'Fermeture demandée 🔒',
@@ -1296,10 +1349,13 @@
   }
 
   function sendTempTarget() {
-    if (!isConnected()) { toast('⚠️ Non connecté', 'error'); return; }
+    if (!isConnected()) {
+      toast('⚠️ Commandes non disponibles — port WebSocket broker requis', 'error');
+      return;
+    }
     const v     = document.getElementById('tempSlider').value;
     const topic = PROJECT_ROOT + settings.group + '/actionneurs/temp_cible';
-    client.publish(topic, String(v), { qos: 1 }, err => {
+    mqttClient.publish(topic, String(v), { qos: 1 }, err => {
       if (err) { toast('Erreur envoi', 'error'); return; }
       toast('🎯 Temp. cible : ' + v + '°C envoyée');
     });
@@ -1333,7 +1389,8 @@
 
     settings = loadSettings();
     closeSettings();
-    connect();
+    connectMQTT();
+    updateFooterBroker();
     toast('⚙️ Paramètres sauvegardés', 'info');
   }
 
@@ -1348,7 +1405,8 @@
      INIT
   ================================================================ */
   updateFooterBroker();
-  connect();
+  connectSocketIO();   // Lecture capteurs via Socket.IO (serveur du prof) — fonctionne immédiatement
+  connectMQTT();       // Commandes via MQTT WebSocket — fonctionne si le prof ouvre le port WS
   </script>
 </body>
 </html>
