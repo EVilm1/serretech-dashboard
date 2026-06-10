@@ -871,17 +871,22 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">Nom du groupe (actionneurs)</label>
+        <label class="form-label">Nom du projet (actionneurs)</label>
         <input class="form-input" type="text" id="inp-group"
-               autocomplete="off" placeholder="serre">
+               autocomplete="off" placeholder="SerreTech">
         <div class="form-hint">
-          Topics publiés : <code>bzh/mecatro/projets/<b>serre</b>/actionneurs/…</code>
+          Correspond au namespace Arduino.<br>
+          Topics envoyés : <code>bzh/mecatro/<b>SerreTech</b>/actionneurs/…</code>
         </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Client ID</label>
+        <label class="form-label">Client ID (web)</label>
         <input class="form-input" type="text" id="inp-client" autocomplete="off">
+        <div class="form-hint">
+          ⚠️ Doit être différent de l'Arduino (<code>SerreTechClientR4</code>).<br>
+          Deux clients identiques = l'un est expulsé du broker.
+        </div>
       </div>
 
       <div class="modal-actions">
@@ -899,7 +904,7 @@
      CONFIG & CONSTANTS
   ================================================================ */
   const DASHBOARD_ROOT = 'bzh/mecatro/dashboard/SerreTech/';
-  const PROJECT_ROOT   = 'bzh/mecatro/projets/';
+  const PROJECT_ROOT   = 'bzh/mecatro/';
 
   // Exact topic suffixes used by the Arduino code
   const TOPIC_MAP = {
@@ -919,7 +924,8 @@
      SETTINGS (localStorage persistence)
   ================================================================ */
   function genClientId() {
-    return 'SerreWeb-' + Math.random().toString(16).slice(2, 8).toUpperCase();
+    // Doit être différent du client Arduino (SerreTechClientR4)
+    return 'SerreTech-Web-' + Math.random().toString(16).slice(2, 6).toUpperCase();
   }
 
   function loadSettings() {
@@ -928,7 +934,7 @@
     const defaultPort  = window.location.protocol === 'https:' ? 8884  : 9001;
     return {
       broker:   localStorage.getItem('st_broker')   || `${defaultProto}://mqtt.dev.icam.school:${defaultPort}`,
-      group:    localStorage.getItem('st_group')    || 'serre',
+      group:    localStorage.getItem('st_group')    || 'SerreTech',
       clientId: localStorage.getItem('st_clientId') || genClientId(),
     };
   }
