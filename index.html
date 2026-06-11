@@ -867,25 +867,25 @@
         color: rgba(255,255,255,.55);
       ">En attente…</div>
       <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-        <button onclick="tryAltUrl('/mqtt')" style="font-size:11px; padding:6px 12px;
-          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
-          border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
-          Essayer <code>:9001/mqtt</code>
+        <button onclick="setUrl('wss://mqtt.dev.icam.school/mqtt')" style="font-size:11px; padding:6px 12px;
+          background:rgba(52,211,153,.1); border:1px solid rgba(52,211,153,.3);
+          border-radius:8px; color:#34d399; cursor:pointer;">
+          ✓ <code>/mqtt</code> (conseillé prof)
         </button>
-        <button onclick="tryAltUrl('/ws')" style="font-size:11px; padding:6px 12px;
+        <button onclick="setUrl('wss://mqtt.dev.icam.school:9001')" style="font-size:11px; padding:6px 12px;
           background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
           border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
-          Essayer <code>:9001/ws</code>
+          <code>:9001</code>
         </button>
-        <button onclick="tryAltUrl('', 8083)" style="font-size:11px; padding:6px 12px;
+        <button onclick="setUrl('wss://mqtt.dev.icam.school:8084')" style="font-size:11px; padding:6px 12px;
           background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
           border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
-          Essayer <code>:8083</code>
+          <code>:8084</code>
         </button>
-        <button onclick="tryAltUrl('', 8080)" style="font-size:11px; padding:6px 12px;
+        <button onclick="setUrl('wss://mqtt.dev.icam.school:9001/mqtt')" style="font-size:11px; padding:6px 12px;
           background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
           border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
-          Essayer <code>:8080</code>
+          <code>:9001/mqtt</code>
         </button>
       </div>
     </details>
@@ -916,10 +916,10 @@
         <label class="form-label">URL Broker (WebSocket)</label>
         <input class="form-input" type="url" id="inp-broker"
                autocomplete="off" autocorrect="off" spellcheck="false"
-               placeholder="ws://mqtt.dev.icam.school:9001">
+               placeholder="wss://mqtt.dev.icam.school/mqtt">
         <div class="form-hint">
-          ℹ️ Sur GitHub Pages (HTTPS) : utilise <strong>wss://</strong> (port 8884).<br>
-          En local (HTTP) : <strong>ws://</strong> port 9001.
+          URL confirmée par le prof : <code>wss://mqtt.dev.icam.school/mqtt</code><br>
+          Alternatives : <code>:9001</code> · <code>:8084</code> · <code>:9001/mqtt</code>
         </div>
       </div>
 
@@ -957,7 +957,7 @@
      CONFIG & CONSTANTS
   ================================================================ */
   const DASHBOARD_ROOT = 'bzh/mecatro/dashboard/SerreTech/';
-  const PROJECT_ROOT   = 'bzh/mecatro/';
+  const PROJECT_ROOT   = 'bzh/mecatro/projets/';
 
   // Exact topic suffixes used by the Arduino code
   const TOPIC_MAP = {
@@ -987,10 +987,8 @@
   }
 
   function loadSettings() {
-    const defaultProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const defaultPort  = window.location.protocol === 'https:' ? 8884  : 9001;
     return {
-      broker:   localStorage.getItem('st_broker')   || `${defaultProto}://mqtt.dev.icam.school:${defaultPort}`,
+      broker:   localStorage.getItem('st_broker')   || 'wss://mqtt.dev.icam.school/mqtt',
       group:    localStorage.getItem('st_group')    || 'SerreTech',
       clientId: localStorage.getItem('st_clientId') || genClientId(),
     };
@@ -1063,18 +1061,12 @@
     }
   }
 
-  function tryAltUrl(path, port) {
-    try {
-      const url = new URL(settings.broker);
-      if (port) url.port = port;
-      url.pathname = path || '/';
-      const newUrl = url.toString().replace(/\/$/, '') + (path || '');
-      log(`Test commandes URL : ${newUrl}`, 'warn');
-      localStorage.setItem('st_broker', newUrl);
-      settings = loadSettings();
-      updateFooterBroker();
-      connectMQTT();
-    } catch(e) { log('URL invalide : ' + e.message, 'err'); }
+  function setUrl(url) {
+    log(`Test commandes → ${url}`, 'warn');
+    localStorage.setItem('st_broker', url);
+    settings = loadSettings();
+    updateFooterBroker();
+    connectMQTT();
   }
 
   /* ================================================================
