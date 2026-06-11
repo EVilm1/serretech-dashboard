@@ -860,28 +860,6 @@
         overflow-y: auto;
         color: rgba(255,255,255,.55);
       ">En attente…</div>
-      <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-        <button onclick="setUrl('wss://mqtt.dev.icam.school/mqtt')" style="font-size:11px; padding:6px 12px;
-          background:rgba(52,211,153,.1); border:1px solid rgba(52,211,153,.3);
-          border-radius:8px; color:#34d399; cursor:pointer;">
-          ✓ <code>/mqtt</code> (conseillé prof)
-        </button>
-        <button onclick="setUrl('wss://mqtt.dev.icam.school:9001')" style="font-size:11px; padding:6px 12px;
-          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
-          border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
-          <code>:9001</code>
-        </button>
-        <button onclick="setUrl('wss://mqtt.dev.icam.school:8084')" style="font-size:11px; padding:6px 12px;
-          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
-          border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
-          <code>:8084</code>
-        </button>
-        <button onclick="setUrl('wss://mqtt.dev.icam.school:9001/mqtt')" style="font-size:11px; padding:6px 12px;
-          background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12);
-          border-radius:8px; color:rgba(255,255,255,.6); cursor:pointer;">
-          <code>:9001/mqtt</code>
-        </button>
-      </div>
     </details>
   </div>
 
@@ -911,28 +889,19 @@
         <input class="form-input" type="url" id="inp-broker"
                autocomplete="off" autocorrect="off" spellcheck="false"
                placeholder="wss://mqtt.dev.icam.school/mqtt">
-        <div class="form-hint">
-          URL confirmée par le prof : <code>wss://mqtt.dev.icam.school/mqtt</code><br>
-          Alternatives : <code>:9001</code> · <code>:8084</code> · <code>:9001/mqtt</code>
-        </div>
       </div>
 
       <div class="form-group">
         <label class="form-label">Nom du projet (actionneurs)</label>
         <input class="form-input" type="text" id="inp-group"
                autocomplete="off" placeholder="SerreTech">
-        <div class="form-hint">
-          Correspond au namespace Arduino.<br>
-          Topics envoyés : <code>bzh/mecatro/<b>SerreTech</b>/actionneurs/…</code>
-        </div>
       </div>
 
       <div class="form-group">
         <label class="form-label">Client ID (web)</label>
         <input class="form-input" type="text" id="inp-client" autocomplete="off">
         <div class="form-hint">
-          ⚠️ Doit être différent de l'Arduino (<code>SerreTechClientR4</code>).<br>
-          Deux clients identiques = l'un est expulsé du broker.
+          ⚠️ Doit être différent de l'Arduino (<code>SerreTechClientR4</code>).
         </div>
       </div>
 
