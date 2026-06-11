@@ -401,12 +401,15 @@
     .btn-open  { background:rgba(34,197,94,.12);  color:var(--green-400); border-color:rgba(34,197,94,.25); }
     .btn-close { background:rgba(248,113,113,.12); color:var(--red);       border-color:rgba(248,113,113,.25); }
     .btn-on    { background:rgba(96,165,250,.12);  color:var(--blue);      border-color:rgba(96,165,250,.25); }
-    .btn-off   { background:rgba(255,255,255,.05); color:rgba(255,255,255,.4); border-color:rgba(255,255,255,.1); }
+    .btn-off   { background:rgba(248,113,113,.12); color:var(--red);       border-color:rgba(248,113,113,.25); }
 
-    .btn:active           { transform: scale(.95); }
-    .btn.active.btn-open  { background:rgba(34,197,94,.28);  border-color:rgba(34,197,94,.5); box-shadow:0 0 16px rgba(34,197,94,.25); }
-    .btn.active.btn-close { background:rgba(248,113,113,.28); border-color:rgba(248,113,113,.5); box-shadow:0 0 16px rgba(248,113,113,.25); }
-    .btn.active.btn-on    { background:rgba(96,165,250,.28);  border-color:rgba(96,165,250,.5); box-shadow:0 0 16px rgba(96,165,250,.25); }
+    .btn:active { transform: scale(.95); }
+
+    /* Actif = fond plein couleur */
+    .btn.active.btn-open  { background:var(--green-500); color:#fff; border-color:var(--green-500); box-shadow:0 0 18px rgba(34,197,94,.4); }
+    .btn.active.btn-close { background:var(--red);       color:#fff; border-color:var(--red);       box-shadow:0 0 18px rgba(248,113,113,.4); }
+    .btn.active.btn-on    { background:var(--blue);      color:#fff; border-color:var(--blue);       box-shadow:0 0 18px rgba(96,165,250,.4); }
+    .btn.active.btn-off   { background:var(--red);       color:#fff; border-color:var(--red);        box-shadow:0 0 18px rgba(248,113,113,.4); }
     .btn:disabled         { opacity:.35; cursor:not-allowed; }
 
     /* ================================================================
@@ -710,6 +713,19 @@
         <div class="card-value" id="val-pressure"></div>
       </div>
 
+      <div class="card" id="card-co2" style="--accent:#34d399">
+        <span class="card-icon">💨</span>
+        <div class="card-label">Capteur CO₂</div>
+        <div class="card-value" id="val-co2"></div>
+        <div class="co2-quality" id="co2-quality"></div>
+        <div class="progress-bar" style="margin-top:8px">
+          <div class="progress-fill" id="bar-co2"></div>
+        </div>
+        <div class="card-sub" style="margin-top:8px">
+          🌡️ Temp. : <span id="val-co2Temp">—</span>
+        </div>
+      </div>
+
     </div>
 
     <!-- ── LUMINOSITÉ ── -->
@@ -753,28 +769,6 @@
         <span class="card-icon">🌡️</span>
         <div class="card-label">Sonde Sol 2</div>
         <div class="card-value" id="val-soilTemp2"></div>
-      </div>
-
-    </div>
-
-    <!-- ── QUALITÉ AIR ── -->
-    <div class="section-title">💨 Qualité de l'Air</div>
-    <div class="cards-grid">
-
-      <div class="card wide" id="card-co2" style="--accent:#34d399">
-        <span class="card-icon">💨</span>
-        <div class="card-label">Taux de CO₂</div>
-        <div class="card-value" id="val-co2"></div>
-        <div class="co2-quality" id="co2-quality"></div>
-        <div class="progress-bar" style="margin-top:10px">
-          <div class="progress-fill" id="bar-co2"></div>
-        </div>
-      </div>
-
-      <div class="card" id="card-co2Temp" style="--accent:#fb923c">
-        <span class="card-icon">🌡️</span>
-        <div class="card-label">Temp. CO₂</div>
-        <div class="card-value" id="val-co2Temp"></div>
       </div>
 
     </div>
