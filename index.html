@@ -814,6 +814,19 @@
       </div>
     </div>
 
+    <!-- CHAUFFAGE -->
+    <div class="ctrl-card">
+      <div class="ctrl-header">
+        <span class="ctrl-icon">🔥</span>
+        <span class="ctrl-title">Chauffage</span>
+        <span class="ctrl-status" id="status-chauffage">—</span>
+      </div>
+      <div class="btn-group">
+        <button class="btn btn-on"  id="btn-on-chauffage"  onclick="sendCmd('chauffage','ON')">▶ Activer</button>
+        <button class="btn btn-off" id="btn-off-chauffage" onclick="sendCmd('chauffage','OFF')">■ Désactiver</button>
+      </div>
+    </div>
+
     <!-- ARROSAGE -->
     <div class="ctrl-card">
       <div class="ctrl-header">
@@ -1229,6 +1242,7 @@
     CLOSE: '🔒 Fermée',
     ON:    '✅ Actif',
     OFF:   '⭕ Inactif',
+    HEAT:  '🔥 Chauffe',
   };
 
   function setActuatorStatus(actuator, value) {
@@ -1239,6 +1253,7 @@
     const pairs = {
       porte:       ['open-porte',         'close-porte'],
       ventilation: ['on-ventilation',     'off-ventilation'],
+      chauffage:   ['on-chauffage',       'off-chauffage'],
       arrosage:    ['on-arrosage',        'off-arrosage'],
     };
 
