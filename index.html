@@ -822,7 +822,7 @@
         <span class="ctrl-status" id="status-chauffage">—</span>
       </div>
       <div class="btn-group">
-        <button class="btn btn-on"  id="btn-on-chauffage"  onclick="sendCmd('chauffage','ON')">▶ Activer</button>
+        <button class="btn btn-on"  id="btn-on-chauffage"  onclick="sendCmd('chauffage','HOT')">▶ Activer</button>
         <button class="btn btn-off" id="btn-off-chauffage" onclick="sendCmd('chauffage','OFF')">■ Désactiver</button>
       </div>
     </div>
@@ -1242,7 +1242,7 @@
     CLOSE: '🔒 Fermée',
     ON:    '✅ Actif',
     OFF:   '⭕ Inactif',
-    HEAT:  '🔥 Chauffe',
+    HOT:   '🔥 Chauffe',
   };
 
   function setActuatorStatus(actuator, value) {
@@ -1261,7 +1261,7 @@
       const [a, b] = pairs[actuator];
       const btnA = document.getElementById('btn-' + a);
       const btnB = document.getElementById('btn-' + b);
-      const isA  = value === 'OPEN' || value === 'ON';
+      const isA  = value === 'OPEN' || value === 'ON' || value === 'HOT';
       if (btnA) btnA.classList.toggle('active', isA);
       if (btnB) btnB.classList.toggle('active', !isA);
     }
